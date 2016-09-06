@@ -56,7 +56,10 @@ fi
 ## Run HGTector
 mkdir -p ${working_dir}/hgtector
 mkdir -p ${working_dir}/hgtector/input
-cp $query_species_coding_seqs_fp ${working_dir}/hgtector/input
+cp $query_species_coding_seqs_fp ${working_dir}/hgtector/input/id.faa
+mkdir -p ${working_dir}/hgtector/presearch
+ln -s $(readlink -f ${diamond_tabular_query}) \
+   ${working_dir}/hgtector/presearch/id.m8
 
 ## create config.txt (if wasn't passed)
 if [ "${hgtector_config_file}" == "None" ]
@@ -68,21 +71,33 @@ then
     searchTool=DIAMOND\n\
     protdb=${diamond_nr}.dmnd\n\
     taxdump=${taxdump_dp}\n\
-    prot2taxid=$gi2taxid.tsv\n\
-    preSearch=${diamond_tabular_query}\n\
+    prot2taxid=${gi_to_taxid_fp}\n\
+    preSearch=${working_dir}/hgtector/presearch\n\
     evalue=1e-20\n\
     identity=30\n\
     coverage=50\n\
     minSize=30\n\
     ignoreSubspecies=1\n\
     graphFp=1\n\
-    exOutlier=2\n" > "$config_fp"
-    if [ "${tax_id}" != "None" ]
+    exOutlier=2\n" > "$hgtector_config_file"
+    if [ "$taxid" != "None" ]
     then
-        echo "selfTax=id:$taxid" >> "$config_fp"
+        echo "selfTax=id:$taxid" >> "$hgtector_config_file"
     fi
+    if [ "$threads" != "None" ]
+    then
+        echo "threads=$threads" >> "$hgtector_config_file"
+    fi
+else
+    cp -f $hgtector_config_file ${working_dir}/hgtector/config.txt
 fi
 
 perl ${hgtector_install_dir}/HGTector.pl ${working_dir}/hgtector
-## print a list of predicted HGT-derived genes
-echo ${working_dir}/hgtector/result/HGT/id.txt
+
+## print predicted HGTs
+echo ""
+echo Putatively HGT-derived genes:
+# query donor_taxid donor_species donor_lineage identity coverage
+awk -F '\t' -v OFS='\t' \
+    '{if ($8 == "1") print $1, $9, $13, $14, $15, $11, $12;}' \
+    ${working_dir}/hgtector/result/detail/id.txt
